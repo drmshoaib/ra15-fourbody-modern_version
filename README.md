@@ -110,9 +110,8 @@ Space-separated, 18 columns per line, 20 decimal places:
 time  x0 y0 x1 y1 x2 y2 x3 y3  vx0 vy0 vx1 vy1 vx2 vy2 vx3 vy3  energy
 ```
 
-The first line is a `#` header. If energy conservation is violated beyond
-the tolerance (|ΔE/E₀| > 10⁻⁹), the simulation stops early and logs the
-offending time step.
+The first line is a `#` header. The final line of stdout reports the
+maximum fractional energy drift `|dE/E0|` observed over the full run.
 
 ---
 
@@ -122,14 +121,15 @@ Defined in `main.cpp` and easily adjusted:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `timestep` | `0.001` | Fixed sequence size passed to RA15 |
-| `maxSteps` | `1 000 000` | Maximum number of output steps |
-| `energyTol` | `1e-9` | Fractional energy drift threshold |
-| `ll` | `-1` | Negative → constant step size mode |
+| `ll` | `8` | Adaptive accuracy: ss = 10⁻⁸ per Radau sequence |
+| `outputInterval` | `0.1` | Time between recorded snapshots |
 | `nclass` | `-2` | Conservative second-order: y'' = F(y, t) |
 
-To switch to **adaptive step size**, change `ll` to a positive integer (6–12).
-A value of `ll = 10` gives approximately 10⁻¹⁰ local truncation error per step.
+`ll` controls the adaptive step size — higher values give more accuracy at
+the cost of more force evaluations per sequence. Typical range: 6–12.
+Set `ll` negative to use a fixed step size equal to `outputInterval`.
+
+To change the total integration time, edit `T` in `data/initialcond.txt`.
 
 ---
 
@@ -162,6 +162,96 @@ $$\ddot{\mathbf{r}}_i = \sum_{j \neq i} \frac{m_j (\mathbf{r}_j - \mathbf{r}_i)}
 Total energy (conserved quantity monitored at every step):
 
 $$E = \underbrace{\frac{1}{2}\sum_i m_i |\dot{\mathbf{r}}_i|^2}_{K} - \underbrace{\sum_{i < j} \frac{m_i m_j}{|\mathbf{r}_i - \mathbf{r}_j|}}_{U}$$
+
+---
+
+## Results & Visualisation
+
+The included Python script generates publication-quality figures from `result1.txt`:
+
+```
+pip install matplotlib numpy
+python FourBody\plot_orbits.py FourBody\result1.txt
+python FourBody\plot_extra.py  FourBody\result1.txt
+```
+
+The sample run uses 4 equal masses (m = 1) placed at the corners of a unit
+square with the exact circular-orbit velocity (v = 0.978).  The system
+rotates as a rigid square for ~7 orbits before instability sets in at t ≈ 44,
+after which the motion becomes chaotic.
+
+---
+
+### Orbit trajectories
+
+Full fading-trail paths of all 4 bodies over T = 100.
+Hollow markers = start, filled markers = end.
+
+![Orbit paths](FourBody/orbit_paths.png)
+
+---
+
+### Phase snapshots — early, middle, late
+
+The early panel confirms a **perfect circular orbit**; chaos develops by the middle phase.
+
+![Phase snapshots](FourBody/orbit_phases.png)
+
+---
+
+### Stability breakdown (t = 35 to 65)
+
+Zoomed view of the transition from regular to chaotic motion, with pairwise
+separations showing the moment all six distances simultaneously diverge from
+their constant values.
+
+![Chaos transition](FourBody/chaos_transition.png)
+
+---
+
+### Pairwise separations
+
+All six body-to-body distances vs time. The flat lines until t ≈ 44 confirm
+the square formation is maintained exactly; a close encounter then breaks it.
+
+![Pairwise separations](FourBody/separations.png)
+
+---
+
+### Phase portraits
+
+Each body's position–velocity phase space (x vs vx, y vs vy), coloured by
+time (dark = early, bright = late).  The tight loops of the regular phase
+scatter into a chaotic attractor after the stability break.
+
+![Phase portrait](FourBody/phase_portrait.png)
+
+---
+
+### Speed profiles
+
+Speed |v| of each body vs time — constant at 0.978 during the circular
+phase, then oscillating wildly after the close encounter at t ≈ 54.
+
+![Speed profile](FourBody/speed_profile.png)
+
+---
+
+### Angular momentum conservation
+
+Total Lz = Σ mᵢ (xᵢ vyᵢ − yᵢ vxᵢ) is conserved to **3 × 10⁻¹⁰** (relative)
+during the regular phase — consistent with 15th-order accuracy.
+
+![Angular momentum](FourBody/angular_momentum.png)
+
+---
+
+### Centre of mass
+
+CoM position drifts by only **~10⁻¹¹** over the full run, confirming that
+the barycentric coordinate constraint is satisfied to near machine precision.
+
+![Centre of mass](FourBody/centre_of_mass.png)
 
 ---
 

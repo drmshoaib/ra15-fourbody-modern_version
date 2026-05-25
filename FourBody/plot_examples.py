@@ -54,64 +54,18 @@ BODY_LABELS  = ["Body 0", "Body 1", "Body 2", "Body 3"]
 BODY_MARKERS = ["o", "s", "^", "D"]
 
 # ── initial condition sets ────────────────────────────────────────────────────
-# Each entry: (tag, title_label, ic_lines_string)
-# ic_lines_string follows the initialcond.txt format:
-#   x0 y0 x1 y1 x2 y2 x3 y3   (positions)
-#   vx0 vy0 vx1 vy1 vx2 vy2 vx3 vy3   (velocities)
-#   m0 m1 m2 m3   (masses)
-#   T
+# Each entry: (tag, title_label, ic_file)
+# IC files live in data/ alongside initialcond.txt.
 
-# Square R=2: bodies at corners of a diamond of radius 2.
-#   Circular orbit speed: v = sqrt(v_unit^2 / R) where v_unit^2=0.9571 at R=1
-#   v^2 = 0.9571/R  =>  v(R=2) = sqrt(0.9571/2) = 0.69148
-V2 = float(np.sqrt(0.9571 / 2.0))   # 0.69148
-
-IC_SQUARE_LARGE = f"""\
- 2.0  0.0  0.0  2.0 -2.0  0.0  0.0 -2.0
- 0.0 {V2:.6f} {-V2:.6f}  0.0  0.0 {-V2:.6f} {V2:.6f}  0.0
- 1.0  1.0  1.0  1.0
-200.0
-"""
-
-# Square R=0.5: same geometry, faster orbit
-#   v(R=0.5) = sqrt(0.9571/0.5) = 1.38366
-V05 = float(np.sqrt(0.9571 / 0.5))  # 1.38366
-
-IC_SQUARE_TIGHT = f"""\
- 0.5  0.0  0.0  0.5 -0.5  0.0  0.0 -0.5
- 0.0 {V05:.6f} {-V05:.6f}  0.0  0.0 {-V05:.6f} {V05:.6f}  0.0
- 1.0  1.0  1.0  1.0
-30.0
-"""
-
-# Hierarchical binary-binary:
-#   Two pairs separated by 8 units.  Each pair has separation 1.
-#   Binary orbital speed: v_bin = sqrt(m/(4*r)) = sqrt(1/2) = 0.7071 (in-plane).
-#   The two pairs also orbit each other (separation 8, total mass 4):
-#     v_outer = sqrt(G*M/4R) = sqrt(4/32) = 0.3536
-#   Body velocities = binary-pair velocity + pair-CoM velocity.
-V_BIN  = 1.0 / np.sqrt(2.0)    # 0.7071 — within-pair orbital speed
-V_OUT  = np.sqrt(4.0 / 32.0)   # 0.3536 — pair-CoM orbital speed
-
-# Pair 1 (bodies 0,1) centred at (+4,0), counterclockwise binary
-#   body 0 at (4,+0.5): binary velocity (-V_BIN, 0) + CoM velocity (0,+V_OUT)
-#   body 1 at (4,-0.5): binary velocity (+V_BIN, 0) + CoM velocity (0,+V_OUT)
-# Pair 2 (bodies 2,3) centred at (-4,0), counterclockwise binary
-#   body 2 at (-4,+0.5): binary velocity (-V_BIN, 0) + CoM velocity (0,-V_OUT)
-#   body 3 at (-4,-0.5): binary velocity (+V_BIN, 0) + CoM velocity (0,-V_OUT)
-
-IC_HIERARCHICAL = (
-    f" 4.0  0.5  4.0 -0.5 -4.0  0.5 -4.0 -0.5\n"
-    f" {-V_BIN:.6f} {V_OUT:.6f}  {V_BIN:.6f} {V_OUT:.6f}"
-    f"  {-V_BIN:.6f} {-V_OUT:.6f}  {V_BIN:.6f} {-V_OUT:.6f}\n"
-    f" 1.0  1.0  1.0  1.0\n"
-    f"300.0\n"
-)
+DATA_DIR = os.path.join(SCRIPT_DIR, "data")
 
 EXAMPLES = [
-    ("square_large",  "Larger square  R = 2  (T = 200)",  IC_SQUARE_LARGE),
-    ("square_tight",  "Tight square  R = 0.5  (T = 30)",  IC_SQUARE_TIGHT),
-    ("hierarchical",  "Hierarchical binary-binary  (T = 300)", IC_HIERARCHICAL),
+    ("square_large",  "Larger square  R = 2  (T = 200)",
+     os.path.join(DATA_DIR, "square_large.txt")),
+    ("square_tight",  "Tight square  R = 0.5  (T = 30)",
+     os.path.join(DATA_DIR, "square_tight.txt")),
+    ("hierarchical",  "Hierarchical binary-binary  (T = 300)",
+     os.path.join(DATA_DIR, "hierarchical.txt")),
 ]
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -123,14 +77,13 @@ def fading_trail(ax, xs, ys, color, lw=1.2):
     ax.add_collection(LineCollection(segs, colors=rgba, linewidths=lw))
 
 
-def run_integrator(ic_text, tag):
-    """Write IC to a temp file, run the exe, return path to result file."""
-    tmp_dir = tempfile.mkdtemp()
-    ic_path  = os.path.join(tmp_dir, f"ic_{tag}.txt")
+def run_integrator(ic_path, tag):
+    """Run the exe with an IC file, return path to result file."""
+    if not os.path.isfile(ic_path):
+        print(f"  IC file not found: {ic_path}")
+        return None
+    tmp_dir  = tempfile.mkdtemp()
     out_path = os.path.join(tmp_dir, f"result_{tag}.txt")
-
-    with open(ic_path, "w") as f:
-        f.write(ic_text)
 
     result = subprocess.run(
         [EXE, ic_path, out_path],
@@ -227,9 +180,9 @@ def make_phase_portrait(t, x, y, vx, vy, title, tag):
 # ── main loop ─────────────────────────────────────────────────────────────────
 generated = {}   # tag -> {orbit_phases, phase_portrait}
 
-for tag, title, ic_text in EXAMPLES:
+for tag, title, ic_path in EXAMPLES:
     print(f"\nRunning integrator: {title}")
-    result_path = run_integrator(ic_text, tag)
+    result_path = run_integrator(ic_path, tag)
     if result_path is None:
         print(f"  SKIPPED (integrator failed)")
         continue

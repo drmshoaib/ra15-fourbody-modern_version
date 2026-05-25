@@ -1,0 +1,46 @@
+name: Build & Run
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-run:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build (Release x64)
+        run: |
+          msbuild FourBodyIntegrator.sln `
+            /p:Configuration=Release `
+            /p:Platform=x64 `
+            /m `
+            /nologo
+
+      - name: Run simulation
+        working-directory: FourBody
+        run: |
+          ..\x64\Release\FourBody.exe data\initialcond.txt result1.txt
+
+      - name: Check output exists and has content
+        working-directory: FourBody
+        run: |
+          if (!(Test-Path result1.txt)) { throw "result1.txt not created" }
+          $lines = (Get-Content result1.txt | Measure-Object -Line).Lines
+          Write-Host "Output lines: $lines"
+          if ($lines -lt 2) { throw "Output file is empty or too short" }
+          Write-Host "=== First 3 data lines ==="
+          Get-Content result1.txt | Select-Object -Skip 1 -First 3
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulation-output
+          path: FourBody/result1.txt

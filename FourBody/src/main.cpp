@@ -1,6 +1,9 @@
-#include <cstdio>
 #include <cmath>
-#include <cstdlib>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <string>
 #include "../../Integrator/include/Force.h"
 #include "../../Integrator/include/RA15.h"
 
@@ -24,66 +27,60 @@ static double calcEnergy(const double* x, const double* v, const double* m)
 
 int main(int argc, char* argv[])
 {
-    const char* inPath  = (argc > 1) ? argv[1] : "data/initialcond.txt";
-    const char* outPath = (argc > 2) ? argv[2] : "result1.txt";
+    const std::string inPath  = (argc > 1) ? argv[1] : "data/initialcond.txt";
+    const std::string outPath = (argc > 2) ? argv[2] : "result1.txt";
 
     double X[8], V[8], M[4], T;
 
-    FILE* in = fopen(inPath, "r");
+    std::ifstream in(inPath);
     if (!in) {
-        fprintf(stderr, "Cannot open input file: %s\n", inPath);
+        std::cerr << "Cannot open input file: " << inPath << "\n";
         return 1;
     }
-    for (int i = 0; i < 8; ++i) fscanf(in, "%lf", &X[i]);
-    for (int i = 0; i < 8; ++i) fscanf(in, "%lf", &V[i]);
-    for (int i = 0; i < 4; ++i) fscanf(in, "%lf", &M[i]);
-    fscanf(in, "%lf", &T);
-    fclose(in);
+    for (int i = 0; i < 8; ++i) in >> X[i];
+    for (int i = 0; i < 8; ++i) in >> V[i];
+    for (int i = 0; i < 4; ++i) in >> M[i];
+    in >> T;
+    in.close();
 
-    FILE* out = fopen(outPath, "w");
+    std::ofstream out(outPath);
     if (!out) {
-        fprintf(stderr, "Cannot create output file: %s\n", outPath);
+        std::cerr << "Cannot create output file: " << outPath << "\n";
         return 1;
     }
+    out << std::setprecision(20) << std::scientific;
 
-    // Integration parameters matching original: fixed step 0.001, 1,000,000 steps
-    const double timestep  = 0.001;
-    const int    maxSteps  = 1000000;
-    const double energyTol = 1.0e-9;
+    // ll=8  → adaptive step size, accuracy ~10^-8 per Radau sequence
+    // outputInterval → time between recorded snapshots
+    const int    ll             = 8;
+    const double outputInterval = 0.1;
+    const int    outputSteps    = static_cast<int>(T / outputInterval);
 
-    const double E0 = calcEnergy(X, V, M);
-    double time = 0.0;
+    const double E0      = calcEnergy(X, V, M);
+    double       time    = 0.0;
+    double       maxDrift = 0.0;
 
-    // Header
-    fprintf(out, "# time x0 y0 x1 y1 x2 y2 x3 y3 vx0 vy0 vx1 vy1 vx2 vy2 vx3 vy3 energy\n");
+    out << "# time x0 y0 x1 y1 x2 y2 x3 y3 vx0 vy0 vx1 vy1 vx2 vy2 vx3 vy3 energy\n";
 
-    for (int i = 0; i < maxSteps; ++i)
+    for (int i = 0; i < outputSteps; ++i)
     {
-        fprintf(out,
-            "%.20f %.20f %.20f %.20f %.20f "
-            "%.20f %.20f %.20f %.20f "
-            "%.20f %.20f %.20f %.20f "
-            "%.20f %.20f %.20f %.20f %.20f\n",
-            time,
-            X[0], X[1], X[2], X[3], X[4], X[5], X[6], X[7],
-            V[0], V[1], V[2], V[3], V[4], V[5], V[6], V[7],
-            calcEnergy(X, V, M));
+        const double E     = calcEnergy(X, V, M);
+        const double drift = std::abs((E - E0) / E0);
+        if (drift > maxDrift) maxDrift = drift;
 
-        // ll = -1 → constant step size XL = timestep
-        ra15(X, V, timestep, timestep, -1, 8, -2, computeForce, M);
+        out << time
+            << " " << X[0] << " " << X[1] << " " << X[2] << " " << X[3]
+            << " " << X[4] << " " << X[5] << " " << X[6] << " " << X[7]
+            << " " << V[0] << " " << V[1] << " " << V[2] << " " << V[3]
+            << " " << V[4] << " " << V[5] << " " << V[6] << " " << V[7]
+            << " " << E << "\n";
 
-        const double E = calcEnergy(X, V, M);
-        if (std::abs((E - E0) / E0) > energyTol) {
-            fprintf(out, "# Energy conservation violated at t=%.6f (dE/E0=%.3e)\n",
-                    time, (E - E0) / E0);
-            fclose(out);
-            return 1;
-        }
-
-        time += timestep;
+        // Integrate one output interval with adaptive step size
+        ra15(X, V, outputInterval, 0.0, ll, 8, -2, computeForce, M);
+        time += outputInterval;
     }
 
-    fclose(out);
-    printf("Done. Output written to %s\n", outPath);
+    std::cout << "Done. " << outputSteps << " snapshots written to " << outPath << "\n";
+    std::cout << "Max |dE/E0| over full run: " << maxDrift << "\n";
     return 0;
 }

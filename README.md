@@ -255,6 +255,74 @@ the barycentric coordinate constraint is satisfied to near machine precision.
 
 ---
 
+## Further examples — comparative initial conditions
+
+The script `FourBody/plot_examples.py` re-runs the integrator with three
+alternative IC sets and generates `orbit_phases` and `phase_portrait` figures
+for each.  Run it with no arguments:
+
+```
+python FourBody\plot_examples.py
+```
+
+---
+
+### Example 1 — Larger square (R = 2, T = 200)
+
+Bodies placed at the corners of a diamond of radius 2, given the exact
+circular-orbit speed v = 0.691.  The system is qualitatively similar to
+the unit square but evolves more slowly; chaotic breakdown arrives later
+and the trajectories spread over a wider region before scattering.
+
+**Phase snapshots**
+
+![Orbit phases — large square](FourBody/orbit_phases_square_large.png)
+
+**Phase portraits** (colour = time: dark early → bright late)
+
+![Phase portrait — large square](FourBody/phase_portrait_square_large.png)
+
+---
+
+### Example 2 — Tight square (R = 0.5, T = 30)
+
+A compact configuration with radius 0.5 and correspondingly faster orbital
+speed v = 1.384.  The higher velocities and shorter inter-body distances
+accelerate the onset of instability; the system leaves the regular orbit
+within a few periods and quickly explores large regions of phase space.
+
+**Phase snapshots**
+
+![Orbit phases — tight square](FourBody/orbit_phases_square_tight.png)
+
+**Phase portraits**
+
+![Phase portrait — tight square](FourBody/phase_portrait_square_tight.png)
+
+---
+
+### Example 3 — Hierarchical binary-binary (T = 300)
+
+Two close binaries (pair separation 1, pair–pair separation 8) are given
+velocities that simultaneously maintain each binary orbit and the slow
+mutual orbit of the two pairs.  The integrator conserves energy to
+**~3 × 10⁻¹⁴** over 300 time units — a demanding test of the RA15
+algorithm on a near-integrable hierarchical problem.
+
+The early and middle phase snapshots show the two binary loops clearly
+separated; the late panel captures the eventual secular drift as the outer
+orbit perturbs the inner pairs.
+
+**Phase snapshots**
+
+![Orbit phases — hierarchical](FourBody/orbit_phases_hierarchical.png)
+
+**Phase portraits**
+
+![Phase portrait — hierarchical](FourBody/phase_portrait_hierarchical.png)
+
+---
+
 ## Differences from the original (2003) code
 
 | Original | This version |
